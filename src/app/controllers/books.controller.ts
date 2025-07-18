@@ -38,13 +38,29 @@ booksRouter.post("/", async (req: Request, res: Response) => {
 });
 
 // Get All Books
-booksRouter.get("/", async (_req: Request, res: Response) => {
+booksRouter.get("/", async (req: Request, res: Response) => {
     try {
-        const books = await Book.find().sort({ createdAt: -1 });
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 0;
+
+        const skip = (page - 1) * limit;
+
+        const books = await Book.find()
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        const totalBooks = await Book.countDocuments();
 
         res.status(200).json({
             success: true,
             data: books,
+            meta: {
+                total: totalBooks,
+                page,
+                limit,
+                totalPages: Math.ceil(totalBooks / limit),
+            },
         });
     } catch (error: any) {
         res.status(500).json({
@@ -53,6 +69,7 @@ booksRouter.get("/", async (_req: Request, res: Response) => {
         });
     }
 });
+
 
 // Get Single Book by ID
 booksRouter.get("/:id", async (req: Request, res: Response) => {
@@ -84,51 +101,51 @@ booksRouter.get("/:id", async (req: Request, res: Response) => {
 
 // Update Book
 booksRouter.patch("/:id", async (req: Request, res: Response) => {
-  const { id } = req.params;
+    const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    res.status(400).json({
-      success: false,
-      message: "Invalid book ID",
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+            success: false,
+            message: "Invalid book ID",
+        });
+        return;
+    }
+
+    const parsed = updateBookZodSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+        res.status(400).json({
+            success: false,
+            message: "Validation error",
+            error: parsed.error.format(),
+        });
+        return;
+    }
+
+    const updateData = parsed.data;
+
+    // যদি copies ফিল্ডটি দেওয়া থাকে তাহলে available ঠিক করে দাও
+    if (typeof updateData.copies === "number") {
+        updateData.available = updateData.copies > 0;
+    }
+
+    const updatedBook = await Book.findByIdAndUpdate(id, updateData, {
+        new: true,
     });
-    return;
-  }
 
-  const parsed = updateBookZodSchema.safeParse(req.body);
+    if (!updatedBook) {
+        res.status(404).json({
+            success: false,
+            message: "Book not found",
+        });
+        return;
+    }
 
-  if (!parsed.success) {
-    res.status(400).json({
-      success: false,
-      message: "Validation error",
-      error: parsed.error.format(),
+    res.status(200).json({
+        success: true,
+        message: "Book updated successfully",
+        data: updatedBook,
     });
-    return;
-  }
-
-  const updateData = parsed.data;
-
-  // যদি copies ফিল্ডটি দেওয়া থাকে তাহলে available ঠিক করে দাও
-  if (typeof updateData.copies === "number") {
-    updateData.available = updateData.copies > 0;
-  }
-
-  const updatedBook = await Book.findByIdAndUpdate(id, updateData, {
-    new: true,
-  });
-
-  if (!updatedBook) {
-    res.status(404).json({
-      success: false,
-      message: "Book not found",
-    });
-    return;
-  }
-
-  res.status(200).json({
-    success: true,
-    message: "Book updated successfully",
-    data: updatedBook,
-  });
 });
 
 
