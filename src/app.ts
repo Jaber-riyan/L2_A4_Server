@@ -14,6 +14,7 @@ app.use(
     cors({
         origin:[
             "http://localhost:5173",
+            "https://libra-nova.netlify.app"
         ],
         credentials:true
     })
